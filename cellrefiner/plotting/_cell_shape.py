@@ -10,10 +10,8 @@ from matplotlib.colors import Normalize, to_rgb
 from matplotlib.patches import Patch
 from matplotlib.transforms import offset_copy
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from scipy.spatial import ConvexHull
 from scipy.sparse import csr_matrix, isspmatrix
-# from math import pi
-from .SEM import SEM
+from .._utils import SEM
 
 
 def plot_cell_shape(sem: SEM,
