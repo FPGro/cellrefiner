@@ -2,7 +2,7 @@ from typing import Optional, Union, List
 import numpy as np
 import pandas as pd
 from anndata import AnnData
-from .SEM import SEM
+from ._cell_shape_modeling import SEM
 from scipy.sparse import csr_matrix
 
 

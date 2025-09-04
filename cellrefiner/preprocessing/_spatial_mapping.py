@@ -18,7 +18,6 @@ from .._utils import H_matrix_vectorized_cpu, H_matrix_vectorized_gpu
 from .._utils import F_spot_optimized_cpu, F_spot_optimized_gpu
 from .._utils import V_xy_vectorized_gpu, V_xy_vectorized_cpu
 from .._utils import F_gc_vectorized_gpu, F_gc_vectorized_cpu
-from .._utils import SEM
 
 
 def spatial_mapping(
@@ -120,21 +119,6 @@ def spatial_mapping(
 
     adata_cr.obsm['spatial_refined'] = final_positions
     return adata_cr
-
-def cell_shape_modeling(adata_cr:AnnData,
-                        cluster_key:str,
-                        sim_name:str = 'untitled'):
-    """
-    
-    """
-    rm = 2
-    rd_ratio = 2.5
-    param = {"rm_intra":rm,"rm_inter":rm*1.2,"dt":0.04,'sigma':1,'alpha':(8,0.5),'gamma':0.001}
-    sem = SEM(20,re=rm,rd_ratio=rd_ratio,adata=adata_cr,cluster_key=cluster_key,sim_name = sim_name,seed=1)
-    sem.sim_gpu(param,T=2000)
-    sem.compute_contact()
-    sem.compute_alphashape()
-    return sem
 
 def spatial_refine_cpu(xs, xc, X_sc2m2, x_id1, H, z_cutoff, x_r, V0, U0, xi1, xi2, dt, iterations):
 

@@ -2,17 +2,16 @@ from typing import Optional, Union, Tuple
 from anndata import AnnData
 import numpy as np
 import pandas as pd
-from matplotlib import colormaps
 from matplotlib.axes import Axes
-from matplotlib import pyplot as plt
+from matplotlib import colormaps
 from matplotlib.collections import LineCollection, PolyCollection
-from matplotlib.colors import Normalize, to_rgb
+from matplotlib.colors import Normalize
 from matplotlib.patches import Patch
 from matplotlib.transforms import offset_copy
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-from scipy.sparse import csr_matrix, isspmatrix
-from .._utils import SEM
 
+from scipy.sparse import csr_matrix, isspmatrix
+from ..tools._cell_shape_modeling import SEM
+from .._utils import get_axes, get_cid_list, add_colorbar,set_axes, get_arr, get_cat_arr_color
 
 def plot_cell_shape(sem: SEM,
                     vis_key: Optional[str] = None,
@@ -90,9 +89,9 @@ def plot_cell_shape(sem: SEM,
     if compute_alphashape or not sem.alphashape_info['computed'] or kwargs:
         sem.compute_alphashape(**kwargs)
 
-    fig, ax = _get_axes(ax)
-    cid_list, _ = _get_cid_list(sem, cid_list)
-    arr = _get_arr(sem, vis_key, arr, summary)
+    fig, ax = get_axes(ax)
+    cid_list, _ = get_cid_list(sem, cid_list)
+    arr = get_arr(sem, vis_key, arr, summary)
 
     if arr is None:
         # vis sem.ctype
@@ -112,7 +111,7 @@ def plot_cell_shape(sem: SEM,
         # vis arr
         if arr.dtype.name == 'category':
             # obtain category and color from arr
-            cat_code, cat_list, color_list = _get_cat_arr_color(
+            cat_code, cat_list, color_list = get_cat_arr_color(
                 sem, arr, cid_list, vis_key, cmap_name)
             colors = color_list[cat_code]
             facecolors = np.insert(colors, 3, face_alpha, axis=1)
@@ -153,11 +152,11 @@ def plot_cell_shape(sem: SEM,
                            edgecolors=bc,
                            linewidths=boundary_width)
     ax.add_collection(polyc)
-    _set_axes(ax, show_axis)
+    set_axes(ax, show_axis)
 
     if enable_colorbar:
         # draw colorbar
-        _add_colorbar(fig, ax, cmap, norm)
+        add_colorbar(fig, ax, cmap, norm)
     elif enable_legend:
         # draw legend
         legend_patches = []
@@ -237,9 +236,9 @@ def element_plot(sem: SEM,
     ax : Axes
     """
 
-    fig, ax = _get_axes(ax)
-    cid_list, xe = _get_cid_list(sem, cid_list, scaling)
-    arr = _get_arr(sem, vis_key, arr, summary)
+    fig, ax = get_axes(ax)
+    cid_list, xe = get_cid_list(sem, cid_list, scaling)
+    arr = get_arr(sem, vis_key, arr, summary)
 
     ec = None
     if arr is None:
@@ -256,7 +255,7 @@ def element_plot(sem: SEM,
         # vis arr
         if arr.dtype.name == 'category':
             # obtain category and color from arr
-            cat_code, cat_list, color_list = _get_cat_arr_color(
+            cat_code, cat_list, color_list = get_cat_arr_color(
                 sem, arr, cid_list, vis_key, cmap_name)
         else:
             cmap = colormaps[cmap_name]
@@ -310,8 +309,8 @@ def element_plot(sem: SEM,
                        s=spot_size)
         if enable_colorbar:
             # draw colorbar
-            _add_colorbar(fig, ax, cmap, norm)
-    _set_axes(ax, show_axis)
+            add_colorbar(fig, ax, cmap, norm)
+    set_axes(ax, show_axis)
 
     if save_name is not None:
         fig.savefig(save_name, dpi=500, bbox_inches='tight', transparent=True)
@@ -360,8 +359,8 @@ def plot_contact_signal(sem: Optional[SEM] = None,
     ----------
     ax : Axes
     """
-    fig, ax = _get_axes(ax)
-    cid_list, _ = _get_cid_list(sem, cid_list)
+    fig, ax = get_axes(ax)
+    cid_list, _ = get_cid_list(sem, cid_list)
     if sem is None:
         assert (adata is not None)
         nc = adata.shape[0]
@@ -412,77 +411,3 @@ def plot_contact_signal(sem: Optional[SEM] = None,
                         colors=line_color, alpha=linealphas)
     ax.add_collection(lc)
     return ax
-
-
-def _get_axes(ax: Optional[Axes] = None) -> Tuple[plt.Figure, Axes]:
-    """create or get axes"""
-    if ax is None:
-        fig, ax = plt.subplots()
-    else:
-        fig = ax.figure
-    return fig, ax
-
-
-def _get_cid_list(sem: SEM, cid_list: Optional[np.ndarray], scaling=True):
-    if scaling:
-        xe = sem.xe*sem.scale+sem.deltax
-    else:
-        xe = sem.xe
-
-    if cid_list is None:
-        cid_list = np.arange(sem.nc)
-    else:
-        xe_vis = []
-        for cid in cid_list:
-            xe_vis.append(xe[sem.ceidn[cid]:sem.ceidn[cid+1]])
-        xe = np.vstack(xe_vis)
-    return cid_list, xe
-
-
-def _add_colorbar(fig, ax, cmap, norm):
-    """add colorbar"""
-    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
-    divider = make_axes_locatable(ax)
-    # to do fix colorbar width
-    cax = divider.append_axes("right", size="5%", pad=0.4)
-    cb = plt.colorbar(sm, cax=cax)
-
-
-def _set_axes(ax, show_axis):
-    """aspect equal, axis off, invert yaxis"""
-    ax.set_aspect('equal', adjustable='box')
-    ax.autoscale(tight=True)
-    if not ax.yaxis_inverted():
-        ax.invert_yaxis()
-    if not show_axis:
-        ax.set_axis_off()
-
-
-def _get_arr(sem, vis_key, arr, summary):
-    if (sem.adata is not None) & (vis_key is not None):
-        if summary == 'gene' and vis_key in sem.adata.var_names:
-            # retrieve gene expression
-            arr = sem.adata[:, vis_key].X.toarray()[:, 0]
-        elif summary == 'sender' and 'sender_signal' in sem.adata.obsm and vis_key in sem.adata.obsm['sender_signal']:
-            # retrieve sender signal
-            arr = sem.adata.obsm['sender_signal'][vis_key].to_numpy()
-        elif summary == 'receiver' and 'receiver_signal' in sem.adata.obsm and vis_key in sem.adata.obsm['receiver_signal']:
-            # retrieve receiver signal
-            arr = sem.adata.obsm['receiver_signal'][vis_key].to_numpy()
-        elif vis_key in sem.adata.obs:
-            arr = sem.adata.obs[vis_key]  # retrieve adata.obs
-    return arr
-
-
-def _get_cat_arr_color(sem, arr, cid_list, vis_key, cmap_name):
-    cat_code = arr.cat.codes[cid_list]
-    cat_list = arr.cat.categories
-    if (vis_key+'_colors') in sem.adata.uns:
-        # use cluster color in the adata
-        color_list = sem.adata.uns[vis_key+'_colors']
-        if type(color_list[0]) is str:
-            color_list = np.array([to_rgb(x) for x in color_list])
-    else:
-        cmap = colormaps[cmap_name]
-        color_list = cmap(np.linspace(0, 1, len(cat_list)))[:, :3]
-    return cat_code, cat_list, color_list

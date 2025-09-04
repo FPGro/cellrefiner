@@ -1,1 +1,2 @@
 from ._contact_communication import contact_communication, cluster_communication
+from ._cell_shape_modeling import cell_shape_modeling
