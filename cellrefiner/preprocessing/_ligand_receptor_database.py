@@ -8,7 +8,7 @@ import io
 def ligand_receptor_database(
     database: str = "CellChat",
     species: str = "mouse",
-    signaling_type: str = "Secreted Signaling" # or "Cell-Cell contact" or "ECM-Receptor"
+    signaling_type: str = "Cell-Cell Contact" # or "Cell-Cell Contact" or "ECM-Receptor"
 ):
     """
     Extract ligand-receptor pairs from LR database.

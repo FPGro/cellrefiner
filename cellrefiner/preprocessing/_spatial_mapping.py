@@ -24,18 +24,27 @@ def spatial_mapping(
         ad_st: AnnData,
         ad_sc: AnnData,
         db: DataFrame,
-        cluster_key: str,
-        spatial_key: str = 'spatial',
+        scale :float,
+        cluster_key_sc: str,
+        spatial_key_st: str = 'spatial',
         embedding_key: str = 'X_pca',
         uns_key: str = 'rank_genes_groups',
         n_cell: int = 5,
         device: str = 'cuda:0'
-):
+) -> AnnData:
     """
 
     """
 
-    M = map_fgw(ad_st, ad_sc, cluster_key, spatial_key, uns_key, device)
+    if uns_key not in ad_sc.uns:
+        sc.tl.rank_genes_groups(ad_sc, groupby=cluster_key_sc)
+        # markers_df = pd.DataFrame(
+        #     ad_sc.uns['rank_genes_groups']['names']).iloc[0:100, :]
+        # markers = list(np.unique(markers_df.melt().value.values))
+        # ad_sc = ad_sc[:, ad_sc.var_names.isin(markers)].copy()
+    
+    x_coord = ad_st.obsm[spatial_key_st]
+    M = map_fgw(ad_st, ad_sc, x_coord, device)
     # adata_sc.var_names = adata_sc.var_names.str.lower()
     # adata_st.var_names = adata_st.var_names.str.lower()
 
@@ -44,21 +53,20 @@ def spatial_mapping(
     # adata_sc = adata_sc[:, shared_genes].copy()
 
     W = gen_w(ad_sc, db)
-    x_coord = ad_st.obsm[spatial_key]
-    scale = np.abs(np.max(x_coord[:, 0]) - np.min(x_coord[:, 0]))
+    x_range = np.abs(np.max(x_coord[:, 0]) - np.min(x_coord[:, 0]))
     # parameters
-    m_val = .016/scale*5000
-    U0 = 0.1 / (2.85 / m_val)  # .1
-    V0 = 1.1 / (2.85 / m_val)  # 1.1
-    xi1 = 1.21 / (2.85 / m_val)  # 1.21
-    xi2 = 1.9 / (2.85 / m_val)  # 1.9
+    m_val = scale/x_range*5000
+    U0 = 0.1 / (2.85 / m_val)
+    V0 = 1.1 / (2.85 / m_val)
+    xi1 = 1.21 / (2.85 / m_val)
+    xi2 = 1.9 / (2.85 / m_val)
     iterations = 10
     dt = 20
-    xsr = .016/scale*5000
-    x_r = .016/scale*5000
+    xsr = scale/x_range*5000
+    x_r = scale/x_range*5000
     z_cutoff = 0.4  # level set cutoff for defining tissue boundary
 
-    x_coord = x_coord / scale * 5000
+    x_coord = x_coord / x_range * 5000
     a = np.tile(x_coord[:, 0], (n_cell, 1)).T.flatten()
     b = np.tile(x_coord[:, 1], (n_cell, 1)).T.flatten()
     xs = np.concatenate(([a], [b]), axis=0).T
@@ -117,7 +125,10 @@ def spatial_mapping(
     except:
         final_positions = spatial_refine_cpu(xs, xc, X_sc2m2, x_id1, H, z_cutoff, x_r, V0, U0, xi1, xi2, dt, iterations)
 
-    adata_cr.obsm['spatial_refined'] = final_positions
+    if 'spatial' in adata_cr.obsm:
+        adata_cr.obsm['spatial_cr'] = final_positions * x_range / 5000
+    else:
+        adata_cr.obsm['spatial'] = final_positions * x_range / 5000
     return adata_cr
 
 def spatial_refine_cpu(xs, xc, X_sc2m2, x_id1, H, z_cutoff, x_r, V0, U0, xi1, xi2, dt, iterations):
@@ -285,18 +296,11 @@ def spatial_refine_gpu(xs, xc, X_sc2m2, x_id1, H, z_cutoff, x_r, V0, U0, xi1, xi
     return cp.asnumpy(pos_gpu[-1, :, :])
 
 
-def map_fgw(ad_st: AnnData, ad_sc: AnnData, cluster_key: str, spatial_key: str, uns_key: str, device: str):
-    if uns_key not in ad_sc.uns:
-        sc.tl.rank_genes_groups(ad_sc, groupby=cluster_key)
-        markers_df = pd.DataFrame(
-            ad_sc.uns['rank_genes_groups']['names']).iloc[0:100, :]
-        markers = list(np.unique(markers_df.melt().value.values))
-        ad_sc = ad_sc[:, ad_sc.var_names.isin(markers)].copy()
+def map_fgw(ad_st: AnnData, ad_sc: AnnData, st_location, device: str):
 
     shared_genes = list(set(ad_st.var_names).intersection(set(ad_sc.var_names)))
     ad_st = ad_st[:, shared_genes].copy()
     ad_sc = ad_sc[:, shared_genes].copy()
-    locations = ad_st.obsm[spatial_key]
 
     spatial_regularization_strength = 0.1
     z_dim = 50
@@ -306,7 +310,7 @@ def map_fgw(ad_st: AnnData, ad_sc: AnnData, cluster_key: str, spatial_key: str, 
     min_stop = 100
 
     # SpaceFlow graph generation
-    spatial_graph = graph_alpha(locations)
+    spatial_graph = graph_alpha(st_location)
 
     # generating model for spaceflow embedding
     model = DeepGraphInfomax(
@@ -331,7 +335,7 @@ def map_fgw(ad_st: AnnData, ad_sc: AnnData, cluster_key: str, spatial_key: str, 
         z, neg_z, summary = model(expr, edge_list)
         loss = model.loss(z, neg_z, summary)
 
-        coords = torch.tensor(locations, dtype=torch.float32).to(device)
+        coords = torch.tensor(st_location, dtype=torch.float32).to(device)
 
         z_dists = torch.cdist(z, z, p=2)
         z_dists = torch.div(z_dists, torch.max(z_dists)).to(device)
@@ -362,7 +366,7 @@ def map_fgw(ad_st: AnnData, ad_sc: AnnData, cluster_key: str, spatial_key: str, 
 
     # spatial cost matrix using spaceflow embedding
     A1d = cosine_similarity(embedding)
-    A = np.multiply(A1d, distance_matrix(locations, locations))
+    A = np.multiply(A1d, distance_matrix(st_location, st_location))
     A /= A.max()
     M = mapper(ad_sc, ad_st, A)  # run mapping
     return M  # numpy matrix output (cell by spot)

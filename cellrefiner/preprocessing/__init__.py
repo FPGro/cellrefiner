@@ -1,2 +1,2 @@
-from ._ligand_receptor_database import ligand_receptor_database
+from ._ligand_receptor_database import ligand_receptor_database, filter_lr_database
 from ._spatial_mapping import spatial_mapping

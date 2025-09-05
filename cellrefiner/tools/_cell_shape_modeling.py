@@ -16,14 +16,17 @@ from .._utils import AlphaShape
 
 def cell_shape_modeling(adata_cr:AnnData,
                         cluster_key:str,
+                        spatial_key:str = 'spatial',
+                        embedding_key = 'X_pca',
                         sim_name:str = 'untitled'):
     """
     
     """
     rm = 2
     rd_ratio = 2.5
+    ne = 20
     param = {"rm_intra":rm,"rm_inter":rm*1.2,"dt":0.04,'sigma':1,'alpha':(8,0.5),'gamma':0.001}
-    sem = SEM(20,re=rm,rd_ratio=rd_ratio,adata=adata_cr,cluster_key=cluster_key,sim_name = sim_name,seed=1)
+    sem = SEM(ne,rm,rd_ratio,adata = adata_cr,cluster_key=cluster_key,spatial_key = spatial_key,embedding_key = embedding_key, sim_name = sim_name,seed=1)
     sem.sim_gpu(param,T=2000)
     sem.compute_contact()
     sem.compute_alphashape()
