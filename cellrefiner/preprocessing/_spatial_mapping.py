@@ -38,11 +38,13 @@ def spatial_mapping(
 
     if uns_key not in ad_sc.uns:
         sc.tl.rank_genes_groups(ad_sc, groupby=cluster_key_sc)
-        # markers_df = pd.DataFrame(
-        #     ad_sc.uns['rank_genes_groups']['names']).iloc[0:100, :]
-        # markers = list(np.unique(markers_df.melt().value.values))
-        # ad_sc = ad_sc[:, ad_sc.var_names.isin(markers)].copy()
-    
+    markers_df = pd.DataFrame(ad_sc.uns[uns_key]['names']).iloc[0:100, :]
+    markers = list(np.unique(markers_df.melt().value.values))
+    ad_sc0 = ad_sc.copy()
+    ad_sc = ad_sc[:, ad_sc.var_names.isin(markers)].copy()
+    ad_sc.var_names = ad_sc.var_names.str.lower()
+    ad_st.var_names = ad_st.var_names.str.lower()
+    db['interaction_name'] = db['interaction_name'].apply(str.lower)
     x_coord = ad_st.obsm[spatial_key_st]
     M = map_fgw(ad_st, ad_sc, x_coord, device)
     # adata_sc.var_names = adata_sc.var_names.str.lower()
@@ -112,7 +114,7 @@ def spatial_mapping(
         print("Warning: Determinant computation failed, using zero matrix")
         H = np.zeros(np.shape(W1))
 
-    adata_cr = ad_sc[cell5m, :].copy()
+    adata_cr = ad_sc0[cell5m, :].copy()
 
     if embedding_key not in adata_cr.obsm:
         sc.pp.pca(adata_cr)
@@ -302,6 +304,16 @@ def map_fgw(ad_st: AnnData, ad_sc: AnnData, st_location, device: str):
     ad_st = ad_st[:, shared_genes].copy()
     ad_sc = ad_sc[:, shared_genes].copy()
 
+    # Extract expression matrices
+    sc_expr = ad_sc.X
+    st_expr = ad_st.X
+
+    # Convert sparse matrices to dense if needed
+    if scipy.sparse.issparse(sc_expr):
+        sc_expr = sc_expr.toarray()
+    if scipy.sparse.issparse(st_expr):
+        st_expr = st_expr.toarray()
+    
     spatial_regularization_strength = 0.1
     z_dim = 50
     lr = 1e-3  # learning rate for spaceflow
@@ -318,7 +330,7 @@ def map_fgw(ad_st: AnnData, ad_sc: AnnData, st_location, device: str):
         summary=lambda z, *args, **kwargs: torch.sigmoid(z.mean(dim=0)),
         corruption=corruption).to(device)
 
-    expr = torch.tensor(ad_st.X.toarray()).float().to(device)
+    expr = torch.tensor(st_expr).float().to(device)
 
     edge_list = sparse_mx_to_torch_edge_list(spatial_graph).to(device)
 
@@ -368,7 +380,7 @@ def map_fgw(ad_st: AnnData, ad_sc: AnnData, st_location, device: str):
     A1d = cosine_similarity(embedding)
     A = np.multiply(A1d, distance_matrix(st_location, st_location))
     A /= A.max()
-    M = mapper(ad_sc, ad_st, A)  # run mapping
+    M = mapper(sc_expr, st_expr, A)  # run mapping
     return M  # numpy matrix output (cell by spot)
 
 
@@ -448,7 +460,7 @@ def cosine_similarity(X_sf):
     return similarity_matrix
 
 
-def mapper(ad_sc, ad_st, A):
+def mapper(sc_expr, st_expr, A):
     """
     Assign cells from single-cell data to spots in spatial data using Fused Gromov-Wasserstein,
     allowing multiple cells per spot (up to max_cells_per_spot).
@@ -470,15 +482,15 @@ def mapper(ad_sc, ad_st, A):
             Array of spot indices for each cell. Length equals number of cells that were assigned.
     """
 
-    # Extract expression matrices
-    sc_expr = ad_sc.X
-    st_expr = ad_st.X
+    # # Extract expression matrices
+    # sc_expr = ad_sc.X
+    # st_expr = ad_st.X
 
-    # Convert sparse matrices to dense if needed
-    if scipy.sparse.issparse(sc_expr):
-        sc_expr = sc_expr.toarray()
-    if scipy.sparse.issparse(st_expr):
-        st_expr = st_expr.toarray()
+    # # Convert sparse matrices to dense if needed
+    # if scipy.sparse.issparse(sc_expr):
+    #     sc_expr = sc_expr.toarray()
+    # if scipy.sparse.issparse(st_expr):
+    #     st_expr = st_expr.toarray()
 
     # Normalize
     sc_expr_norm = sc_expr / \
@@ -492,8 +504,8 @@ def mapper(ad_sc, ad_st, A):
     # Convert to distance/cost matrix (1 - similarity) for FGW
     M = 1 - similarity_matrix
 
-    n_cells = ad_sc.shape[0]
-    n_spots = ad_st.shape[0]
+    n_cells = sc_expr.shape[0]
+    n_spots = st_expr.shape[0]
 
     # Single cell cost matrix (cosine similarity)
     C1 = 1-np.dot(sc_expr_norm, sc_expr_norm.T)

@@ -7,8 +7,8 @@ from scipy.sparse import csr_matrix
 
 
 def contact_communication(df_ligrec: pd.DataFrame,
-                          sem: Optional[SEM] = None,
                           adata: Optional[AnnData] = None,
+                          sem: Optional[SEM] = None,
                           contact_key: Optional[str] = 'contacts',
                           lr_delimiter: str = '-',
                           heteromeric_delimiter: str = '_'):
@@ -116,7 +116,7 @@ def contact_communication(df_ligrec: pd.DataFrame,
 
 def cluster_communication(adata: AnnData,
                           cluster_key: str,
-                          signal: str = 'total',
+                          signal: str,
                           n_permutations: int = 100,
                           seed: int = 0):
     """
@@ -131,8 +131,7 @@ def cluster_communication(adata: AnnData,
     rng = np.random.default_rng(seed)
     tmp_df, tmp_p_value = summarize_cluster(
         sig_mat, cluster_cell, cluster_list, rng, n_permutations=n_permutations)
-    adata.uns[cluster_key+'-' +
-              signal] = {'communication_matrix': tmp_df, 'communication_pvalue': tmp_p_value}
+    adata.uns[cluster_key+'-' + signal] = {'communication_matrix': tmp_df, 'communication_pvalue': tmp_p_value}
 
 
 def summarize_signal(adata: AnnData, cluster_key: str):

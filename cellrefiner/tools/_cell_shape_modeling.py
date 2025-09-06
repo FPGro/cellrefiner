@@ -14,24 +14,6 @@ import warnings
 from tqdm import tqdm
 from .._utils import AlphaShape
 
-def cell_shape_modeling(adata_cr:AnnData,
-                        cluster_key:str,
-                        spatial_key:str = 'spatial',
-                        embedding_key = 'X_pca',
-                        sim_name:str = 'untitled'):
-    """
-    
-    """
-    rm = 2
-    rd_ratio = 2.5
-    ne = 20
-    param = {"rm_intra":rm,"rm_inter":rm*1.2,"dt":0.04,'sigma':1,'alpha':(8,0.5),'gamma':0.001}
-    sem = SEM(ne,rm,rd_ratio,adata = adata_cr,cluster_key=cluster_key,spatial_key = spatial_key,embedding_key = embedding_key, sim_name = sim_name,seed=1)
-    sem.sim_gpu(param,T=2000)
-    sem.compute_contact()
-    sem.compute_alphashape()
-    return sem
-
 class CellBase:
     """Base class for cell morphology representations"""
     
@@ -674,3 +656,25 @@ class cellshape_GT(CellBase):
     
     def __repr__(self):
         return f'Cell Number: {self.nc}\nElement Number: {self.xe.shape[0]}\nDim: {self.dim}'
+    
+def cell_shape_modeling(adata_cr:AnnData,
+                        cluster_key:str,
+                        spatial_key:str = 'spatial',
+                        embedding_key = 'X_pca',
+                        sim_name:str = 'untitled',
+                        rng_seed:int = 1
+                        ) -> SEM: 
+    """
+    cell_shape_modeling
+    """
+
+    
+    rm = 2
+    rd_ratio = 2.5
+    ne = 20
+    param = {"rm_intra":rm,"rm_inter":rm*1.2,"dt":0.04,'sigma':1,'alpha':(8,0.5),'gamma':0.001}
+    sem = SEM(ne,rm,rd_ratio,adata = adata_cr,cluster_key=cluster_key,spatial_key = spatial_key,embedding_key = embedding_key, sim_name = sim_name,seed=rng_seed)
+    sem.sim_gpu(param,T=2000)
+    sem.compute_contact()
+    sem.compute_alphashape()
+    return sem
