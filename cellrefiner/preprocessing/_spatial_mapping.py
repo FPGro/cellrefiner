@@ -50,7 +50,7 @@ def spatial_mapping(
     scale : float
         Spatial scale parameter that determines the interaction distance, representing the size of spatial transcriptomics spot.
     cluster_key_sc : str, Optional
-        Column name in `ad_sc.obs` that contains cell type annotations, used for `scanpy.tl.rank_genes_groups(ad_sc, groupby=cluster_key_sc)`
+        Key in `ad_sc.obs` that contains cell type annotations, used for `scanpy.tl.rank_genes_groups(ad_sc, groupby=cluster_key_sc)`
     spatial_key_st : str, default 'spatial'
         Key in `ad_st.obsm` that contains spatial coordinates
     pca_key : str, default 'X_pca'

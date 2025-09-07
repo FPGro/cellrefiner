@@ -657,15 +657,54 @@ class cellshape_GT(CellBase):
     def __repr__(self):
         return f'Cell Number: {self.nc}\nElement Number: {self.xe.shape[0]}\nDim: {self.dim}'
     
-def cell_shape_modeling(adata_cr:AnnData,
-                        cluster_key:str,
-                        spatial_key:str = 'spatial',
-                        embedding_key = 'X_pca',
-                        sim_name:str = 'untitled',
-                        rng_seed:int = 1
+def cell_shape_modeling(adata: AnnData,
+                        cluster_key: str,
+                        ne: int = 20,
+                        rd_ratio: float = 2.5,
+                        spatial_key: str = 'spatial',
+                        pca_key: str = 'X_pca',
+                        rng_seed: int = 1
                         ) -> SEM: 
     """
-    cell_shape_modeling
+    Perform cell shape modeling based on subcellular element method
+
+    Parameters
+    ----------
+    adata : Anndata
+        AnnData object
+    cluster_key : str
+        Key in `adata.obs` that contains cell type annotations
+    ne : int, default 20
+        number of elements per cells
+    rd_ratio : float, default 2.5
+        Cell radius-distance ratio
+
+        - rd_ratio>2: cell radius < cell distance/2, tissue with gaps
+
+        - rd_ratio=2: cell radius = cell distance/2, no gaps (confluent tissue)
+
+        - rd_ratio<2: cell radius > cell distance/2, overcrowded
+
+    spatial_key : str, default 'spatial'
+        Key in `adata.obsm` that contains spatial coordinates
+
+    pca_key : str
+        Key in `adata.obsm` that contains PCA embeddings.
+
+        If not in `adata.obsm`, `scanpy.pp.pca(adata)` will be computed.
+    rng_seed : int
+        random generator seed
+
+    Returns
+    -------
+    SEM
+        SEM object containing cell shapes and cell-cell contains information
+
+    .obsp['contacts'] for cell-cell contains will be add to adata
+
+    Examples
+    --------
+    >>>> sem = cr.tl.cell_shape_modeling(adata,cluster_key = 'cell_type')
     """
 
     
@@ -673,7 +712,11 @@ def cell_shape_modeling(adata_cr:AnnData,
     rd_ratio = 2.5
     ne = 20
     param = {"rm_intra":rm,"rm_inter":rm*1.2,"dt":0.04,'sigma':1,'alpha':(8,0.5),'gamma':0.001}
-    sem = SEM(ne,rm,rd_ratio,adata = adata_cr,cluster_key=cluster_key,spatial_key = spatial_key,embedding_key = embedding_key, sim_name = sim_name,seed=rng_seed)
+    sem = SEM(ne, rm, rd_ratio, adata = adata,
+              cluster_key=cluster_key,
+              spatial_key = spatial_key,
+              embedding_key = pca_key,
+              seed=rng_seed)
     sem.sim_gpu(param,T=2000)
     sem.compute_contact()
     sem.compute_alphashape()
