@@ -18,41 +18,90 @@ from .._utils import H_matrix_vectorized_cpu, H_matrix_vectorized_gpu
 from .._utils import F_spot_optimized_cpu, F_spot_optimized_gpu
 from .._utils import V_xy_vectorized_gpu, V_xy_vectorized_cpu
 from .._utils import F_gc_vectorized_gpu, F_gc_vectorized_cpu
-
+from typing import Optional, Union, List, Iterable
 
 def spatial_mapping(
         ad_st: AnnData,
         ad_sc: AnnData,
         db: DataFrame,
         scale :float,
-        cluster_key_sc: str,
+        cluster_key_sc: Optional[str] = None,
         spatial_key_st: str = 'spatial',
-        embedding_key: str = 'X_pca',
+        pca_key: str = 'X_pca',
         uns_key: str = 'rank_genes_groups',
+        n_rank_gene: Optional[int] = 100,
         n_cell: int = 5,
-        device: str = 'cuda:0'
+        device: str = 'cuda:0',
+        enable_cupy: bool = True,
 ) -> AnnData:
     """
+    Perform spatial mapping of single-cell data to spatial transcriptomics data.
 
+    Parameters
+    ----------
+    ad_st : AnnData
+        Spatial transcriptomics AnnData object.
+        
+        Must contain spatial coordinates in `.obsm[spatial_key_st]`.
+    ad_sc : AnnData
+        Single-cell RNA-seq AnnData object.
+    db : DataFrame
+        Ligand-receptor interaction database.
+    scale : float
+        Spatial scale parameter that determines the interaction distance, representing the size of spatial transcriptomics spot.
+    cluster_key_sc : str, Optional
+        Column name in `ad_sc.obs` that contains cell type annotations, used for `scanpy.tl.rank_genes_groups(ad_sc, groupby=cluster_key_sc)`
+    spatial_key_st : str, default 'spatial'
+        Key in `ad_st.obsm` that contains spatial coordinates
+    pca_key : str, default 'X_pca'
+        Key in `ad_sc.obsm` that contains PCA embeddings.
+
+        If not in `ad_sc.obsm`, `scanpy.pp.pca()` will be computed.
+    uns_key : str, default 'rank_genes_groups'
+        Key in `ad_sc.uns` containing ranked genes results from `scanpy.tl.rank_genes_groups()`
+
+        If not present, `scanpy.tl.rank_genes_groups(ad_sc, groupby=cluster_key_sc)` will be computed.
+    n_rank_gene : int or None, default 100
+        Number of top-ranked genes for each cell type that will be used in spatial mapping.
+
+        If None, all genes will be used.
+    n_cell : int, default 5
+        Number of cells to map to each spatial location.
+    device : str, default 'cuda:0'
+        Device used by pytorch.
+    enable_cupy : bool, default True
+        Whether to enable CuPy. If CuPy is not available, will automatically fall back to CPU.
+
+    Returns
+    -------
+    AnnData
+        AnnData object containing mapped cells with refined spatial coordinates.
+        
+        `.obsm['spatial']`: Refined spatial coordinates. If `.obsm['spatial']` is present in ad_sc, 
+        then stored as `.obsm['spatial_refined']`.
+
+        Same gene expression data as input single-cell RNA-seq data
+
+    Examples
+    --------
+    >>> adata_cr = spatial_mapping(adata_st,adata_sc,db_lr,scale=125,cluster_key_sc = 'cell_type')
     """
 
-    if uns_key not in ad_sc.uns:
-        sc.tl.rank_genes_groups(ad_sc, groupby=cluster_key_sc)
-    markers_df = pd.DataFrame(ad_sc.uns[uns_key]['names']).iloc[0:100, :]
-    markers = list(np.unique(markers_df.melt().value.values))
+    
     ad_sc0 = ad_sc.copy()
-    ad_sc = ad_sc[:, ad_sc.var_names.isin(markers)].copy()
+    if n_rank_gene is not None:
+        if uns_key not in ad_sc.uns:
+            sc.tl.rank_genes_groups(ad_sc, groupby=cluster_key_sc)
+        markers_df = pd.DataFrame(ad_sc.uns[uns_key]['names'])
+        markers_df = markers_df.iloc[:n_rank_gene, :]
+        markers = list(np.unique(markers_df.melt().value.values))
+        ad_sc = ad_sc[:, ad_sc.var_names.isin(markers)].copy()
     ad_sc.var_names = ad_sc.var_names.str.lower()
     ad_st.var_names = ad_st.var_names.str.lower()
     db['interaction_name'] = db['interaction_name'].apply(str.lower)
     x_coord = ad_st.obsm[spatial_key_st]
-    M = map_fgw(ad_st, ad_sc, x_coord, device)
-    # adata_sc.var_names = adata_sc.var_names.str.lower()
-    # adata_st.var_names = adata_st.var_names.str.lower()
 
-    # shared_genes = list(set(adata_st.var_names).intersection(set(adata_sc.var_names)))
-    # adata_st = adata_st[:, shared_genes].copy()
-    # adata_sc = adata_sc[:, shared_genes].copy()
+    M = map_fgw(ad_st, ad_sc, x_coord, device)
 
     W = gen_w(ad_sc, db)
     x_range = np.abs(np.max(x_coord[:, 0]) - np.min(x_coord[:, 0]))
@@ -116,15 +165,23 @@ def spatial_mapping(
 
     adata_cr = ad_sc0[cell5m, :].copy()
 
-    if embedding_key not in adata_cr.obsm:
+    if pca_key not in adata_cr.obsm:
         sc.pp.pca(adata_cr)
-        embedding_key = 'X_pca'
-    X_sc2m2 = adata_cr.obsm[embedding_key]
+        pca_key = 'X_pca'
+    X_sc2m2 = adata_cr.obsm[pca_key]
 
     # check gpu avaliablity
     try:
+        import cupy as cp
+        enable_cupy = cp.cuda.runtime.getDeviceCount() > 0
+        print("GPU acceleration available with CuPy")
+    except ImportError:
+        enable_cupy = False
+        print("CuPy not available")
+
+    if enable_cupy:
         final_positions = spatial_refine_gpu(xs, xc, X_sc2m2, x_id1, H, z_cutoff, x_r, V0, U0, xi1, xi2, dt, iterations)
-    except:
+    else:
         final_positions = spatial_refine_cpu(xs, xc, X_sc2m2, x_id1, H, z_cutoff, x_r, V0, U0, xi1, xi2, dt, iterations)
 
     if 'spatial' in adata_cr.obsm:
@@ -481,16 +538,6 @@ def mapper(sc_expr, st_expr, A):
     numpy.ndarray
             Array of spot indices for each cell. Length equals number of cells that were assigned.
     """
-
-    # # Extract expression matrices
-    # sc_expr = ad_sc.X
-    # st_expr = ad_st.X
-
-    # # Convert sparse matrices to dense if needed
-    # if scipy.sparse.issparse(sc_expr):
-    #     sc_expr = sc_expr.toarray()
-    # if scipy.sparse.issparse(st_expr):
-    #     st_expr = st_expr.toarray()
 
     # Normalize
     sc_expr_norm = sc_expr / \

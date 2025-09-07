@@ -3,12 +3,12 @@ import pandas as pd
 from anndata import AnnData
 import pkgutil
 import io
+from typing import Optional, Union, List, Iterable
 
-# commot code
 def ligand_receptor_database(
     database: str = "CellChat",
     species: str = "mouse",
-    signaling_type: str = "Cell-Cell Contact" # or "Cell-Cell Contact" or "ECM-Receptor"
+    signaling_types: Union[str,Iterable[str]] = ["Secreted Signaling", "Cell-Cell Contact", "ECM-Receptor"] # "Secreted Signaling", "Cell-Cell Contact", "ECM-Receptor"
 ):
     """
     Extract ligand-receptor pairs from LR database.
@@ -42,18 +42,25 @@ def ligand_receptor_database(
     """
     assert database in ("CellChat", "CellPhoneDB")
     assert species in ("mouse", "human", "zebrafish")
-    assert signaling_type in ("Secreted Signaling", "Cell-Cell Contact", "ECM-Receptor")
-    if database == "CellChat":
-        data = pkgutil.get_data(__name__, "_data/LRdatabase/CellChatDB.ligrec."+species+".csv")
-        df_ligrec = pd.read_csv(io.BytesIO(data), index_col=0)
-        if not signaling_type is None:
-            df_ligrec = df_ligrec[df_ligrec.iloc[:,3] == signaling_type]
-    elif database == 'CellPhoneDB':
-        data = pkgutil.get_data(__name__, "_data/LRdatabase/CellPhoneDBv4.0."+species+".csv")
-        df_ligrec = pd.read_csv(io.BytesIO(data), index_col=0)
-        if not signaling_type is None:
-            df_ligrec = df_ligrec[df_ligrec.iloc[:,3] == signaling_type]
+    if isinstance(signaling_types, str):
+        signaling_types = [signaling_types]
+    df_list = []
+    for signaling_type in signaling_types:
+        assert signaling_type in ("Secreted Signaling", "Cell-Cell Contact", "ECM-Receptor")
+        if database == "CellChat":
+            data = pkgutil.get_data(__name__, "_data/LRdatabase/CellChatDB.ligrec."+species+".csv")
+            df_ligrec = pd.read_csv(io.BytesIO(data), index_col=0)
+            if not signaling_type is None:
+                df_ligrec = df_ligrec[df_ligrec.iloc[:,3] == signaling_type]
+        elif database == 'CellPhoneDB':
+            data = pkgutil.get_data(__name__, "_data/LRdatabase/CellPhoneDBv4.0."+species+".csv")
+            df_ligrec = pd.read_csv(io.BytesIO(data), index_col=0)
+            if not signaling_type is None:
+                df_ligrec = df_ligrec[df_ligrec.iloc[:,3] == signaling_type]
+        df_list.append(df_ligrec)
+    df_ligrec = pd.concat(df_list)
     df_ligrec.columns = ['Ligand', 'Receptor', 'Pathway', 'Type']
+    df_ligrec['interaction_name'] = df_ligrec['Ligand']+'_'+df_ligrec['Receptor']
     return df_ligrec
 
 def filter_lr_database(
@@ -101,6 +108,7 @@ def filter_lr_database(
     gene_ncell = np.array( (adata.X > 0).sum(axis=0) ).reshape(-1)
     ligrec_list = []
     genes_keep = []
+    columns = df_ligrec.columns
     if not heteromeric:
         tmp_genes = set(df_ligrec.iloc[:,0]).union(set(df_ligrec.iloc[:,1]))
         tmp_genes = list(tmp_genes.intersection(data_genes))
@@ -146,4 +154,4 @@ def filter_lr_database(
         if df_ligrec.iloc[i,0] in genes_keep and df_ligrec.iloc[i,1] in genes_keep:
             ligrec_list.append(list(df_ligrec.iloc[i,:]))
     
-    return pd.DataFrame(data=ligrec_list, columns = ['Ligand', 'Receptor', 'Pathway', 'Type'])
+    return pd.DataFrame(data=ligrec_list, columns = columns)
