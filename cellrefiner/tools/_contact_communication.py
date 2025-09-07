@@ -6,20 +6,61 @@ from ._cell_shape_modeling import SEM
 from scipy.sparse import csr_matrix
 
 
-def contact_communication(df_ligrec: pd.DataFrame,
-                          adata: Optional[AnnData] = None,
-                          sem: Optional[SEM] = None,
-                          contact_key: Optional[str] = 'contacts',
-                          lr_delimiter: str = '-',
-                          heteromeric_delimiter: str = '_'):
+def contact_communication(
+        df_ligrec: pd.DataFrame,
+        adata: AnnData,
+        sem: Optional[SEM] = None,
+        contact_key: Optional[str] = 'contacts',
+        lr_delimiter: str = '-',
+        heteromeric_delimiter: str = '_'
+    ) -> None:
     '''
-    Contact signal inference
+    Contact-base communication inference
 
-    signal matrix is stored as .obsp['ligand-receptor']
+    Parameters
+    ----------
+    df_ligrec : DataFrame
+        Ligand-receptor interaction database
+    adata : Anndata
+        Anndata object, must contain cell-cell contact information in `.obsp[contact_key]` if `sem` is None.
+    sem : SEM, optional
+        cell shape model object that contains cell-cell contact matrix and associated AnnData.
 
-    signal names are stored as .uns['contact_signal_info']
+        If provided, contact matrix will be obtained from `sem.contact_matrix`.
 
-    rows are sender cells, columns are receiver cells
+        If both `sem` and `adata` are provided, `adata` parameter takes precedence.
+    contact_key : str, default 'contacts'
+        Key in `adata.obsp` containing the cell-cell contact matrix (csr_matrix).
+    lr_delimiter : str, default '-'
+        Delimiter used to construct ligand-receptor pair names in output.
+    heteromeric_delimiter : str, default '_'
+        Delimiter used to separate subunits in heteromeric complexes within `df_ligrec`.
+
+        For example, if a receptor complex is 'TGFBR1_TGFBR2', this parameter should be '_'.
+    Returns
+    -------
+        add `.obsp['{ligand}{lr_delimiter}{receptor}']`, Contact-base communication via ligand-receptor pairs 
+        (rows are sender cells, columns are receiver cells)
+
+        add `.obsp['{pathway}']`, Pathway-level contact-base communication
+
+        add `.obsp['total']`, Sum of all pathway communication
+
+        add `.obsm['sender_signal']`, DataFrame with sender communication strengths per cell
+
+        add `.obsm['receiver_signal']`, DataFrame with receiver communication strengths per cell
+
+        add `.uns['contact_signal_info']`, Dictionary containing
+            - 'lr_pair': List of L-R pair names
+            - 'pathway': List of pathway names  
+            - 'total': ['total']
+            - 'db': Filtered ligand-receptor database
+    
+    Examples
+    --------
+    >>> db_lr = cr.pp.ligand_receptor_database()
+    >>> db_lr = cr.pp.filter_lr_database(db_lr,adata_cr, min_cell_pct=0.01)
+    >>> cr.tl.contact_communication(db_lr, adata)
     '''
 
     if df_ligrec.shape[0] == 0:
