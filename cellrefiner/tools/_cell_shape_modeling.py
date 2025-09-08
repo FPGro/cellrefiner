@@ -663,7 +663,7 @@ def cell_shape_modeling(adata: AnnData,
                         rd_ratio: float = 2.5,
                         spatial_key: str = 'spatial',
                         pca_key: str = 'X_pca',
-                        rng_seed: int = 1
+                        seed: int = 1
                         ) -> SEM: 
     """
     Perform cell shape modeling based on subcellular element method
@@ -692,15 +692,16 @@ def cell_shape_modeling(adata: AnnData,
         Key in `adata.obsm` that contains PCA embeddings.
 
         If not in `adata.obsm`, `scanpy.pp.pca(adata)` will be computed.
-    rng_seed : int
-        random generator seed
+    seed : int
+        random seed
 
     Returns
     -------
     SEM
         SEM object containing cell shapes and cell-cell contains information
 
-    .obsp['contacts'] for cell-cell contains will be add to adata
+    Set the field in adata
+        `.obsp['contacts']` (csr_matrix) for cell-cell contacts
 
     Examples
     --------
@@ -716,7 +717,7 @@ def cell_shape_modeling(adata: AnnData,
               cluster_key=cluster_key,
               spatial_key = spatial_key,
               embedding_key = pca_key,
-              seed=rng_seed)
+              seed=seed)
     sem.sim_gpu(param,T=2000)
     sem.compute_contact()
     sem.compute_alphashape()

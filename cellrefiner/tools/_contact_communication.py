@@ -20,11 +20,11 @@ def contact_communication(
     Parameters
     ----------
     df_ligrec : DataFrame
-        Ligand-receptor interaction database
+        Dataframe where each row corresponds to a ligand-receptor pair with ligands, receptors, and the associated signaling pathways in the three columns, respectively.
     adata : Anndata
         Anndata object, must contain cell-cell contact information in `.obsp[contact_key]` if `sem` is None.
     sem : SEM, optional
-        cell shape model object that contains cell-cell contact matrix and associated AnnData.
+        Cell shape model object that contains cell-cell contact matrix and associated AnnData.
 
         If provided, contact matrix will be obtained from `sem.contact_matrix`.
 
@@ -39,18 +39,20 @@ def contact_communication(
         For example, if a receptor complex is 'TGFBR1_TGFBR2', this parameter should be '_'.
     Returns
     -------
-        add `.obsp['{ligand}{lr_delimiter}{receptor}']`, Contact-base communication via ligand-receptor pairs 
+    Sets the following fields in adata
+
+        add `.obsp['{ligand}{lr_delimiter}{receptor}']`, contact-base communication matrix via ligand-receptor pairs 
         (rows are sender cells, columns are receiver cells)
 
-        add `.obsp['{pathway}']`, Pathway-level contact-base communication
+        add `.obsp['{pathway}']`, pathway-level contact-base communication matrix
 
-        add `.obsp['total']`, Sum of all pathway communication
+        add `.obsp['total']`, sum of all pathway communication matrix
 
-        add `.obsm['sender_signal']`, DataFrame with sender communication strengths per cell
+        add `.obsm['sender_signal']`, dataFrame with sender communication strengths per cell
 
-        add `.obsm['receiver_signal']`, DataFrame with receiver communication strengths per cell
+        add `.obsm['receiver_signal']`, dataFrame with receiver communication strengths per cell
 
-        add `.uns['contact_signal_info']`, Dictionary containing
+        add `.uns['contact_signal_info']`, metadata of the analysis
             - 'lr_pair': List of L-R pair names
             - 'pathway': List of pathway names  
             - 'total': ['total']
@@ -161,9 +163,33 @@ def cluster_communication(adata: AnnData,
                           n_permutations: int = 100,
                           seed: int = 0):
     """
-    Cluster-cluster communication
+    Summarize cell-cell communication to cluster-cluster communication and compute p-values 
+    by permutating cell/spot labels.
 
-    add cluster communication to .uns
+    Parameters
+    ----------
+    adata : Anndata
+        Anndata object, must contain cell-cell contact information in `.obsp[contact_key]` if `sem` is None.
+    cluster_key : str
+        Key in `.obs` that contains cell type annotations
+    signal : str
+        Key in `.obsp` that contains communication matrix
+    n_permutations : int, default 100
+        Number of label permutations for computing the p-value.
+    seed : int, default 0
+        random seed
+
+    Returns
+    -------
+    Sets the following fields in adata
+
+        add `.uns['{cluster_key}-{signal}']`, cluster-level communication via {signal}
+            - .uns['{cluster_key}-{signal}']['communication_matrix'], cluster-level communication matrix
+            - .uns['{cluster_key}-{signal}']['communication_pvalue'], p-values
+    
+    Examples
+    --------
+    >>> cr.tl.cluster_communication(adata,cluster_key = 'cell_type',signal = 'NOTCH')
     """
 
     cluster_list = list(adata.obs[cluster_key].cat.categories)
@@ -173,25 +199,6 @@ def cluster_communication(adata: AnnData,
     tmp_df, tmp_p_value = summarize_cluster(
         sig_mat, cluster_cell, cluster_list, rng, n_permutations=n_permutations)
     adata.uns[cluster_key+'-' + signal] = {'communication_matrix': tmp_df, 'communication_pvalue': tmp_p_value}
-
-
-def summarize_signal(adata: AnnData, cluster_key: str):
-    df_r = pd.DataFrame(index=adata.obs.index,
-                        columns=adata.uns['contact_signal'])
-    df_s = pd.DataFrame(index=adata.obs.index,
-                        columns=adata.uns['contact_signal'])
-    for sig_key in adata.uns['contact_signal']:
-        df_r[sig_key] = adata.obsp[sig_key].toarray().sum(
-            axis=0)  # receiver signal
-        df_s[sig_key] = adata.obsp[sig_key].toarray().sum(
-            axis=1)  # sender signal
-    selected_columns = [
-        col for col in adata.uns['contact_signal'] if len(col.split('-')) > 1]
-    df_r_sel = df_r[selected_columns]
-    df_s_sel = df_s[selected_columns]
-    df_r_sel['cell_type'] = adata.obs[cluster_key]
-    df_s_sel['cell_type'] = adata.obs[cluster_key]
-    return df_r_sel.groupby('cell_type').mean(), df_s_sel.groupby('cell_type').mean()
 
 
 def summarize_cluster(X, clusterid, clusternames, rng, n_permutations):

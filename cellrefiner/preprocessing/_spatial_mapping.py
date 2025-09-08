@@ -26,7 +26,7 @@ def spatial_mapping(
         db: DataFrame,
         scale :float,
         cluster_key_sc: Optional[str] = None,
-        spatial_key_st: str = 'spatial',
+        spatial_key: str = 'spatial',
         pca_key: str = 'X_pca',
         uns_key: str = 'rank_genes_groups',
         n_rank_gene: Optional[int] = 100,
@@ -35,14 +35,14 @@ def spatial_mapping(
         enable_cupy: bool = True,
 ) -> AnnData:
     """
-    Perform spatial mapping of single-cell data to spatial transcriptomics data.
+    Perform mapping of single-cell data to spatial transcriptomics data and spatial refinement.
 
     Parameters
     ----------
     ad_st : AnnData
         Spatial transcriptomics AnnData object.
         
-        Must contain spatial coordinates in `.obsm[spatial_key_st]`.
+        Must contain spatial coordinates in `.obsm[spatial_key]`.
     ad_sc : AnnData
         Single-cell RNA-seq AnnData object.
     db : DataFrame
@@ -51,7 +51,7 @@ def spatial_mapping(
         Spatial scale parameter that determines the interaction distance, representing the size of spatial transcriptomics spot.
     cluster_key_sc : str, Optional
         Key in `ad_sc.obs` that contains cell type annotations, used for `scanpy.tl.rank_genes_groups(ad_sc, groupby=cluster_key_sc)`
-    spatial_key_st : str, default 'spatial'
+    spatial_key : str, default 'spatial'
         Key in `ad_st.obsm` that contains spatial coordinates
     pca_key : str, default 'X_pca'
         Key in `ad_sc.obsm` that contains PCA embeddings.
@@ -96,11 +96,8 @@ def spatial_mapping(
         markers_df = markers_df.iloc[:n_rank_gene, :]
         markers = list(np.unique(markers_df.melt().value.values))
         ad_sc = ad_sc[:, ad_sc.var_names.isin(markers)].copy()
-    ad_sc.var_names = ad_sc.var_names.str.lower()
-    ad_st.var_names = ad_st.var_names.str.lower()
-    db['interaction_name'] = db['interaction_name'].apply(str.lower)
-    x_coord = ad_st.obsm[spatial_key_st]
-
+    
+    x_coord = ad_st.obsm[spatial_key]
     M = map_fgw(ad_st, ad_sc, x_coord, device)
 
     W = gen_w(ad_sc, db)

@@ -1,7 +1,9 @@
 import numpy as np
-import cupy as cp
-from scipy.sparse import csr_matrix
-
+from scipy.sparse import issparse
+try:
+    import cupy as cp
+except ImportError:
+    cp = None
 
 def pre_cal1(N):
     degree = np.diag(np.sum(N, axis=1))
@@ -78,11 +80,8 @@ def gen_w(adata_sc, db):
     Generate LR affinity matrix
     """
 
-    if isinstance(adata_sc.X, csr_matrix):
-        a = adata_sc.X.toarray()
-    else:
-        a = adata_sc.X
-
+    a = adata_sc.X.toarray() if issparse(adata_sc.X) else adata_sc.X
+    
     # ligand expression matrix
     tl = np.zeros((a.shape[0], len(db['interaction_name'])))
     # receptor expression matrix
