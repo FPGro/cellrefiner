@@ -1,5 +1,7 @@
 import numpy as np
-from scipy.sparse import issparse
+from scipy.sparse import issparse, lil_matrix
+from scipy.spatial import Delaunay, distance
+
 try:
     import cupy as cp
 except ImportError:
@@ -288,3 +290,22 @@ def F_gc_vectorized_cpu(positions_i, positions_j, correlations, mask):
         forces[valid_mask] = (correlations[valid_mask, np.newaxis] * diff[valid_mask] / norms[valid_mask, np.newaxis])
     
     return forces
+
+def estimate_scale(xc: np.ndarray):
+    nc = xc.shape[0]
+    distance_matrix = lil_matrix((nc, nc))
+    tri = Delaunay(xc)
+    for simplex in tri.simplices:
+        for i in range(3):
+            for j in range(i + 1, 3):
+                d = distance.euclidean(xc[simplex[i]],xc[simplex[j]])
+                distance_matrix[simplex[i], simplex[j]] = d
+                distance_matrix[simplex[j], simplex[i]] = d
+
+    dc = np.zeros(nc)
+    for cid in range(nc):
+        _,j=distance_matrix[cid].nonzero()
+        dc[cid] = np.mean(distance_matrix[cid,j]) if len(j)>0 else np.nan # some points might overlap with others
+    
+    dc = dc[~np.isnan(dc)]
+    return np.median(dc)/2

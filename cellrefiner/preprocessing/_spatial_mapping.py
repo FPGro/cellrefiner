@@ -12,7 +12,7 @@ import gudhi
 import networkx as nx
 from torch_geometric.nn import DeepGraphInfomax, GCNConv
 import torch.nn as nn
-from .._utils import gen_w, pre_cal1, sparsify, cal_glvs, glvs
+from .._utils import gen_w, pre_cal1, sparsify, cal_glvs, glvs, estimate_scale
 from .._utils import compute_correlation_matrix_cpu, compute_correlation_matrix_gpu
 from .._utils import H_matrix_vectorized_cpu, H_matrix_vectorized_gpu
 from .._utils import F_spot_optimized_cpu, F_spot_optimized_gpu
@@ -24,7 +24,7 @@ def spatial_mapping(
         ad_st: AnnData,
         ad_sc: AnnData,
         db: DataFrame,
-        scale :float,
+        scale: Optional[float] = None,
         cluster_key_sc: Optional[str] = None,
         spatial_key: str = 'spatial',
         pca_key: str = 'X_pca',
@@ -103,6 +103,8 @@ def spatial_mapping(
     W = gen_w(ad_sc, db)
     x_range = np.abs(np.max(x_coord[:, 0]) - np.min(x_coord[:, 0]))
     # parameters
+    if scale is None:
+        scale = estimate_scale(x_coord)
     m_val = scale/x_range*5000
     U0 = 0.1 / (2.85 / m_val)
     V0 = 1.1 / (2.85 / m_val)
@@ -185,6 +187,8 @@ def spatial_mapping(
         adata_cr.obsm['spatial_cr'] = final_positions * x_range / 5000
     else:
         adata_cr.obsm['spatial'] = final_positions * x_range / 5000
+
+    adata_cr.uns['spatial_mapping'] = dict(scale=scale,n_cell=n_cell,n_rank_gene=n_rank_gene)
     return adata_cr
 
 def spatial_refine_cpu(xs, xc, X_sc2m2, x_id1, H, z_cutoff, x_r, V0, U0, xi1, xi2, dt, iterations):
