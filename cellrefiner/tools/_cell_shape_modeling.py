@@ -705,7 +705,7 @@ def cell_shape_modeling(adata: AnnData,
 
     Examples
     --------
-    >>>> sem = cr.tl.cell_shape_modeling(adata,cluster_key = 'cell_type')
+    >>> sem = cr.tl.cell_shape_modeling(adata,cluster_key = 'cell_type')
     """
 
     

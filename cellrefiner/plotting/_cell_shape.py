@@ -82,8 +82,12 @@ def plot_cell_shape(sem: SEM,
         keyword arguments passed to `sem.compute_alphashape()`
 
     Returns
-    ----------
+    --------
     ax : Axes
+
+    Examples
+    --------
+    >>> cr.pl.plot_cell_shape(sem)
     """
 
     if compute_alphashape or not sem.alphashape_info['computed'] or kwargs:
@@ -358,7 +362,14 @@ def plot_contact_signal(sem: Optional[SEM] = None,
     Returns
     ----------
     ax : Axes
+
+    Examples
+    --------
+    >>> fig,ax=plt.subplots(figsize=(12,12))
+    >>> cr.pl.plot_cell_shape(sem,ax=ax,vis_key='NOTCH',boundary_color='gray',boundary_width=0.1)
+    >>> cr.pl.plot_contact_signal(sem,ax=ax,signal = 'NOTCH')
     """
+    
     fig, ax = get_axes(ax)
     cid_list, _ = get_cid_list(sem, cid_list)
     if sem is None:
