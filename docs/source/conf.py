@@ -27,6 +27,7 @@ extensions = [
     'sphinx.ext.autosummary',    # 自动摘要
     'sphinx_autodoc_typehints',  # 类型提示支持
     'sphinx.ext.githubpages',    # GitHub Pages支持
+    'nbsphinx',
 ]
 
 # Generate API documentation
