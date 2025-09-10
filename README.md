@@ -62,3 +62,7 @@ Contact-based communication analysis
 ```python
 cr.tl.contact_communication(db_lr, adata = adata_cr)
 ```
+
+# Documentation
+
+See detailed documentation at https://cellrefiner.readthedocs.io/en/latest/
