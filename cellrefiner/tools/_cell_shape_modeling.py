@@ -692,7 +692,7 @@ def cell_shape_modeling(adata: AnnData,
         Key in `adata.obsm` that contains PCA embeddings.
 
         If not in `adata.obsm`, `scanpy.pp.pca(adata)` will be computed.
-    seed : int
+    seed : int, default 1
         random seed
 
     Returns

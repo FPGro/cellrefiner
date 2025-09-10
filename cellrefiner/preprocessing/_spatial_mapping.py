@@ -19,6 +19,7 @@ from .._utils import F_spot_optimized_cpu, F_spot_optimized_gpu
 from .._utils import V_xy_vectorized_gpu, V_xy_vectorized_cpu
 from .._utils import F_gc_vectorized_gpu, F_gc_vectorized_cpu
 from typing import Optional, Union, List, Iterable
+import warnings
 
 def spatial_mapping(
         ad_st: AnnData,
@@ -33,6 +34,7 @@ def spatial_mapping(
         n_cell: int = 5,
         device: str = 'cuda:0',
         enable_cupy: bool = True,
+        seed: int = 0
 ) -> AnnData:
     """
     Perform mapping of single-cell data to spatial transcriptomics data and spatial refinement.
@@ -71,6 +73,8 @@ def spatial_mapping(
         Device used by pytorch.
     enable_cupy : bool, default True
         Whether to enable CuPy. If CuPy is not available, will automatically fall back to CPU.
+    seed : int, default 0
+        random seed
 
     Returns
     -------
@@ -87,11 +91,13 @@ def spatial_mapping(
     >>> adata_cr = spatial_mapping(adata_st,adata_sc,db_lr,scale=125,cluster_key_sc = 'cell_type')
     """
 
-    
+    np.random.seed(seed)
     ad_sc0 = ad_sc.copy()
     if n_rank_gene is not None:
         if uns_key not in ad_sc.uns:
-            sc.tl.rank_genes_groups(ad_sc, groupby=cluster_key_sc)
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                sc.tl.rank_genes_groups(ad_sc, groupby=cluster_key_sc, use_raw=False)
         markers_df = pd.DataFrame(ad_sc.uns[uns_key]['names'])
         markers_df = markers_df.iloc[:n_rank_gene, :]
         markers = list(np.unique(markers_df.melt().value.values))
@@ -185,6 +191,7 @@ def spatial_mapping(
 
     if 'spatial' in adata_cr.obsm:
         adata_cr.obsm['spatial_cr'] = final_positions * x_range / 5000
+        print(".obsm['spatial'] exist. Add refined spatial coordinates to .obsm['spatial_cr']")
     else:
         adata_cr.obsm['spatial'] = final_positions * x_range / 5000
 

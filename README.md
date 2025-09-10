@@ -31,6 +31,8 @@ conda install cupy cudatoolkit -c conda-forge
 
 # Usage
 
+For detailed examples, please refer to the `tutorials` folder.
+
 Import packages
 
 ```python
