@@ -34,6 +34,8 @@ def spatial_mapping(
         n_cell: int = 5,
         device: str = 'cuda:0',
         enable_cupy: bool = True,
+        return_cell5m = False,
+        zero_H = True,
         seed: int = 0
 ) -> AnnData:
     """
@@ -156,18 +158,18 @@ def spatial_mapping(
     # Fix determinant computation warning
     try:
         det_L = np.linalg.det(L)
+        print('det_L:',det_L)
         # Check for valid determinant (not NaN or inf)
         if np.isfinite(det_L) and det_L > 1e-10:
             q = pre_cal1(W1)
             H = sparsify(W1, q)
         else:
-            print(
-                "Warning: Laplacian matrix is singular or ill-conditioned, using zero matrix")
-            H = np.zeros(np.shape(W1))
+            # print("Warning: Laplacian matrix is singular or ill-conditioned, using zero matrix")
+            H = np.zeros(np.shape(W1)) if zero_H else W1
     except np.linalg.LinAlgError:
         print("Warning: Determinant computation failed, using zero matrix")
         H = np.zeros(np.shape(W1))
-
+    print('H==0',np.all(H==0))
     adata_cr = ad_sc0[cell5m, :].copy()
 
     if pca_key not in adata_cr.obsm:
@@ -196,7 +198,10 @@ def spatial_mapping(
         adata_cr.obsm['spatial'] = final_positions * x_range / 5000
 
     adata_cr.uns['spatial_mapping'] = dict(scale=scale,n_cell=n_cell,n_rank_gene=n_rank_gene)
-    return adata_cr
+    if return_cell5m:
+        return adata_cr,cell5m
+    else:
+        return adata_cr
 
 def spatial_refine_cpu(xs, xc, X_sc2m2, x_id1, H, z_cutoff, x_r, V0, U0, xi1, xi2, dt, iterations):
 

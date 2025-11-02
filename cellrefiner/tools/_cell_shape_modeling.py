@@ -713,11 +713,13 @@ def cell_shape_modeling(adata: AnnData,
     rd_ratio = 2.5
     ne = 20
     param = {"rm_intra":rm,"rm_inter":rm*1.2,"dt":0.04,'sigma':1,'alpha':(8,0.5),'gamma':0.001}
-    sem = SEM(ne, rm, rd_ratio, adata = adata,
-              cluster_key=cluster_key,
-              spatial_key = spatial_key,
-              embedding_key = pca_key,
-              seed=seed)
+    sem = SEM(
+        ne, rm, rd_ratio, adata = adata,
+        cluster_key=cluster_key,
+        spatial_key = spatial_key,
+        embedding_key = pca_key,
+        seed=seed
+        )
     sem.sim_gpu(param,T=2000)
     sem.compute_contact()
     sem.compute_alphashape()
