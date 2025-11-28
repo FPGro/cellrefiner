@@ -95,23 +95,29 @@ class CellBase:
         
     def _init_from_adata(self,cluster_key,spatial_key):
         """Initialize properties from AnnData object"""
+        
         if spatial_key in self.adata.obsm:
             self.xc = self.adata.obsm[spatial_key].astype(np.float32)
             self.nc, self.dim = self.xc.shape
+            print(f"gathering cell positions from adata.obsm['{spatial_key}']")
         else:
             raise KeyError(f"Spatial key '{spatial_key}' not found in adata.obsm")
         
         if cluster_key in self.adata.obs:
             self.ctype = self.adata.obs[cluster_key].cat.codes.to_numpy()
             self.ctype_list = self.adata.obs[cluster_key].cat.categories.to_numpy()
+            print(f"gathering cell types from adata.obs['{cluster_key}']")
         else:
-            raise KeyError(f"Cluster key '{cluster_key}' not found in adata.obs")
+            raise KeyError(f"'{cluster_key}' not found in adata.obs")
         
         if f'{cluster_key}_colors' in self.adata.uns:
             color_list = self.adata.uns[f'{cluster_key}_colors']
             if isinstance(color_list[0], str):
                 color_list = np.array([to_rgb(x) for x in color_list])
             self.color_list = color_list
+            print(f"gathering cell type colors from adata.uns['{cluster_key}_colors']")
+        else:
+            raise KeyError(f"'{cluster_key}_colors' not found in adata.uns")
 
     def _init_from_direct_inputs(self,xc,ctype,color_list):
         """Initialize properties from direct inputs"""
@@ -367,7 +373,7 @@ class SEM(CellBase):
                  re: float,
                  rd_ratio: float = 2.5,
                  adata: Optional[AnnData] = None,
-                 cluster_key: str = 'leiden',
+                 cluster_key: Optional[str] = None,
                  spatial_key: str = 'spatial',
                  embedding_key: str = 'X_pca',
                  xc: Optional[np.ndarray] = None,
@@ -436,7 +442,7 @@ class SEM(CellBase):
             # only one cell
             rc = 1
         self.rc = rc
-        rc_n = np.sqrt(ne_per_cell*(re/2)**2)# to-do: better estimation for steady state radius
+        rc_n = np.sqrt(ne_per_cell*(re/2)**2)
         self.scale = rc/rc_n
         self.deltax = np.mean(self.xc, axis=0)
         self.xc = (self.xc-self.deltax)/self.scale ## scaling xc to xc_n/rc_n = xc/rc
@@ -641,7 +647,7 @@ class cellshape_GT(CellBase):
                  color_list: Optional[np.ndarray] = None,
                  adata: Optional[AnnData] = None,
                  spatial_key: str = 'spatial',
-                 cluster_key: str = 'leiden'):
+                 cluster_key: Optional[str] = None):
         self.nc = ceidn.shape[0]-1
         super().__init__(adata, xc, ctype, cluster_key, spatial_key, color_list)
         # Visualization-specific properties
