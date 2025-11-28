@@ -178,8 +178,7 @@ def plot_cell_shape(sem: SEM,
     if enable_annotation:
         spatial_coor = sem.xc*sem.scale+sem.deltax
         for i in cid_list:
-            ax.annotate(
-                f'{i}', spatial_coor[i], ha='center', va='center', fontweight='bold')
+            ax.annotate(f'{i}', spatial_coor[i], ha='center', va='center', fontweight='bold')
 
     if save_name is not None:
         fig.savefig(save_name, dpi=500, bbox_inches='tight', transparent=True)
@@ -321,17 +320,19 @@ def element_plot(sem: SEM,
     return ax
 
 
-def plot_contact_signal(sem: Optional[SEM] = None,
-                        adata: Optional[AnnData] = None,
-                        sig_mat: Optional[Union[csr_matrix,
-                                                np.ndarray]] = None,
-                        signal: Optional[str] = None,
-                        cid_list: Optional[np.ndarray] = None,
-                        scaling: bool = True,
-                        line_width: float = 1,
-                        line_color: Union[str, tuple] = 'k',
-                        line_alpha: float = 1,
-                        ax: Optional[Axes] = None):
+def plot_contact_signal(
+        sem: Optional[SEM] = None,
+        adata: Optional[AnnData] = None,
+        sig_mat: Optional[Union[csr_matrix, np.ndarray]] = None,
+        signal: Optional[str] = None,
+        spatial_key: str = 'spatial',
+        cid_list: Optional[np.ndarray] = None,
+        scaling: bool = True,
+        line_width: float = 1,
+        line_color: Union[str, tuple] = 'k',
+        line_alpha: float = 1,
+        ax: Optional[Axes] = None
+        ):
     """
     Visualize contact signals or relationships between cells
 
@@ -371,13 +372,12 @@ def plot_contact_signal(sem: Optional[SEM] = None,
     """
     
     fig, ax = get_axes(ax)
-    cid_list, _ = get_cid_list(sem, cid_list)
     if sem is None:
         assert (adata is not None)
         nc = adata.shape[0]
         if signal:
             sig_mat = adata.obsp[signal]
-        spatial_coor = adata.obsm['spatial']
+        spatial_coor = adata.obsm[spatial_key]
     else:
         nc = sem.nc
         if signal:
@@ -392,7 +392,8 @@ def plot_contact_signal(sem: Optional[SEM] = None,
             spatial_coor = sem.xc*sem.scale+sem.deltax
         else:
             spatial_coor = sem.xc
-
+    cid_list = np.arange(nc) if cid_list is None else cid_list
+    
     seg = []
     if isinstance(line_width, (list, tuple)):
         data = sig_mat.data
@@ -421,4 +422,142 @@ def plot_contact_signal(sem: Optional[SEM] = None,
     lc = LineCollection(seg, linewidths=linewidths,
                         colors=line_color, alpha=linealphas)
     ax.add_collection(lc)
+    return ax
+
+def plot_cell_element(
+        sem: SEM,
+        vis_key: Optional[str] = None,
+        arr: Optional[Union[np.ndarray, pd.Series]] = None,
+        summary: str = 'sender',
+        cid_list: Optional[np.ndarray] = None, 
+        cmap_name: str ='Reds', 
+        spot_size: float = 1,
+        scaling: bool = True, 
+        show_axis: bool = True, 
+        enable_colorbar: bool = True, 
+        enable_legend: bool = True,
+        ax: Optional[Axes] = None,
+        save_name: Optional[str] = None
+        ) -> Axes:
+    """
+    Plotting cell elements
+
+    Parameters
+    ----------
+    sem : SEM
+        Subcellular element method object
+    vis_key : str, optional
+        Key to retrieve visualization data from `sem.adata`.
+    arr : np.ndarray or pd.Series, optional
+        Data for visualization. Accepts both cell-level (nc,) and element-level (ne,)
+    summary : str, default='sender'
+        'sender' represents sender signal, retrieves data from adata.obsm['sender_signal'][vis_key]
+
+        'receiver' retrieves receiver signal data from adata.obsm['receiver_signal'][vis_key]
+
+        'gene' retrieves gene expression data from adata
+    cid_list : ndarray, optional
+        Array of index for cells to be visualized. Default: all cells
+    cmap_name : str, default='Reds'
+        Valid matplotlib colormap name to visualize data
+    spot_size : float, default=1
+        Markersize for `matplotlib.pyplot.scatter`
+    scaling : bool, default=True
+        Scale coordinates back to original data(`xc`) if True, otherwise visualize directly.
+    show_axis : bool, default=True
+        Show axis.
+    enable_legend : bool, default=False
+        Show categorical legend (only for category data).
+    enable_colorbar : bool, default=False
+        Show colorbar (only for continuous data).
+    ax : Axes, optional
+        Target matplotlib axes object. Creates new figure if None
+    save_name : str, optional
+        Output path for figure saving (e.g., 'figure.pdf')
+    
+    Returns
+    ----------
+    ax : Axes
+    """
+
+    fig, ax = get_axes(ax)
+    cid_list, xe = get_cid_list(sem, cid_list, scaling)
+    arr = get_arr(sem, vis_key, arr, summary)
+
+    ec = None
+    if arr is None:
+        # vis sem.ctype
+        if vis_key is None:
+            # use cell type color in sem
+            cat_code = sem.ctype[cid_list]
+            cat_list = sem.ctype_list
+            color_list = sem.color_list
+        else:
+            raise KeyError(f"vis_key '{vis_key}' not found in genes or adata.obs")
+    else:
+        # vis arr
+        if arr.dtype.name == 'category':
+            # obtain category and color from arr
+            cat_code, cat_list, color_list = get_cat_arr_color(sem,arr,cid_list,vis_key,cmap_name)
+        else:
+            cmap = colormaps[cmap_name]
+            # color norm
+            if arr.min()>=0:
+                norm = Normalize(vmin=arr.min(), vmax=np.percentile(arr,95), clip=False)
+            else:
+                a = np.percentile(np.abs(arr),95)
+                norm = Normalize(vmin=-a, vmax=a, clip=False)
+            # set color
+            if arr.shape[0] == sem.nc:
+                # cell color
+                cc = cmap(norm(arr))
+                # cell color -> element color
+                ec = np.zeros((sem.ne,cc.shape[1]))
+                for cid in range(sem.nc):
+                    ne_i = sem.ceidn[cid+1]-sem.ceidn[cid]
+                    ec[sem.ceidn[cid]:sem.ceidn[cid+1],:] = np.tile(cc[cid],(ne_i,1))
+            else:
+                ec = cmap(norm(arr)) # element color
+    # plot
+    if ec is None:
+        # cell color
+        ecid = []
+        for n,cid in enumerate(cid_list):
+            ecid.append(n*np.ones(sem.ceidn[cid+1]-sem.ceidn[cid]))
+        ecid = np.concatenate(ecid).astype(int)
+        element_cat = cat_code[ecid]
+        for i in np.unique(cat_code):
+            vis = element_cat == i
+            ax.scatter(
+                xe[vis, 0], xe[vis, 1],
+                c = color_list[i][np.newaxis],
+                label=cat_list[i],
+                s=spot_size
+                )
+        if enable_legend:
+            # draw legend
+            transform = offset_copy(ax.transAxes, x=5, y=0, units='points',fig=fig) 
+            ax.legend(
+                loc='center left',
+                bbox_to_anchor=(1, 0.5),
+                bbox_transform=transform,
+                frameon=False,
+                markerscale=5/spot_size
+                )
+    else:
+        # element color
+        for cid in cid_list:
+            ax.scatter(
+                xe[sem.ceidn[cid]:sem.ceidn[cid+1], 0], 
+                xe[sem.ceidn[cid]:sem.ceidn[cid+1], 1], 
+                c = ec[sem.ceidn[cid]:sem.ceidn[cid+1]],
+                s=spot_size
+                )
+        if enable_colorbar:
+            # draw colorbar
+            add_colorbar(fig, ax, cmap, norm)
+    set_axes(ax, show_axis)
+    
+    if save_name is not None:
+        fig.savefig(save_name, dpi=500, bbox_inches='tight', transparent=True)
     return ax
