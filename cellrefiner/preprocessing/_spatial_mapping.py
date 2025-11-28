@@ -34,10 +34,10 @@ def spatial_mapping(
         n_cell: int = 5,
         device: str = 'cuda:0',
         enable_cupy: bool = True,
-        return_cell5m = False,
+        return_mapping = False,
         zero_H = True,
         seed: int = 0
-) -> AnnData:
+    ) -> AnnData:
     """
     Perform mapping of single-cell data to spatial transcriptomics data and spatial refinement.
 
@@ -106,7 +106,7 @@ def spatial_mapping(
         ad_sc = ad_sc[:, ad_sc.var_names.isin(markers)].copy()
     
     x_coord = ad_st.obsm[spatial_key]
-    M = map_fgw(ad_st, ad_sc, x_coord, device)
+    M = map_fgw(ad_st, ad_sc, x_coord, seed, device)
 
     W = gen_w(ad_sc, db)
     x_range = np.abs(np.max(x_coord[:, 0]) - np.min(x_coord[:, 0]))
@@ -131,9 +131,9 @@ def spatial_mapping(
     xc = xs + np.random.normal(0, xsr, size=xs.shape)
 
     # Neighbor computation (keep on CPU for now as it's a one-time operation)
-    neigh = NearestNeighbors(n_neighbors=5)
-    neigh.fit(xc)
-    x_id = neigh.kneighbors(xs)  # first entry is distance, second is indices
+    # neigh = NearestNeighbors(n_neighbors=5)
+    # neigh.fit(xc)
+    # x_id = neigh.kneighbors(xs)  # first entry is distance, second is indices
     x_id1 = []  # list of boolean arrays for neighboring spots
     for i in range(xs.shape[0]):
         x_id1.append(np.linalg.norm(xs - xs[i, :], axis=1) < x_r)
@@ -198,8 +198,8 @@ def spatial_mapping(
         adata_cr.obsm['spatial'] = final_positions * x_range / 5000
 
     adata_cr.uns['spatial_mapping'] = dict(scale=scale,n_cell=n_cell,n_rank_gene=n_rank_gene)
-    if return_cell5m:
-        return adata_cr,cell5m
+    if return_mapping:
+        return adata_cr, cell5, M
     else:
         return adata_cr
 
@@ -368,8 +368,9 @@ def spatial_refine_gpu(xs, xc, X_sc2m2, x_id1, H, z_cutoff, x_r, V0, U0, xi1, xi
     return cp.asnumpy(pos_gpu[-1, :, :])
 
 
-def map_fgw(ad_st: AnnData, ad_sc: AnnData, st_location, device: str):
+def map_fgw(ad_st: AnnData, ad_sc: AnnData, st_location, seed:int, device: str):
 
+    torch.manual_seed(seed)
     shared_genes = list(set(ad_st.var_names).intersection(set(ad_sc.var_names)))
     ad_st = ad_st[:, shared_genes].copy()
     ad_sc = ad_sc[:, shared_genes].copy()
