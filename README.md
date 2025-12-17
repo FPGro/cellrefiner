@@ -21,7 +21,7 @@ pip install git+https://github.com/XiangyuKuang/cellrefiner.git
 
 **Step 3: Install CuPy (Optional)**
 
-CuPy installation will accelerate `cellrefiner.preprocessing.spatial_mapping()`
+CuPy installation will accelerate `cellrefiner.preprocessing.spatial_mapping()`.
 
 We recommend installing CuPy and CUDA toolkit via conda to avoid compatibility issues:
 
@@ -42,11 +42,12 @@ import squidpy as sq
 import cellrefiner as cr
 ```
 
-Load spatial transcriptomics and scRNA-seq datasets (available via the Squidpy package).
+Load spatial transcriptomics and scRNA-seq datasets (available via the Squidpy package)
 
 ```python
 adata_st = sq.datasets.visium_fluo_adata_crop()
-adata_st = adata_st[adata_st.obs.cluster.isin([f"Cortex_{i}" for i in np.arange(1, 5)])].copy() # select cortex region
+# select the cortex region
+adata_st = adata_st[adata_st.obs.cluster.isin([f"Cortex_{i}" for i in range(1, 5)])].copy() 
 adata_sc = sq.datasets.sc_mouse_cortex()
 ```
 
@@ -77,4 +78,4 @@ cr.tl.contact_communication(db_lr, adata = adata_cr)
 
 # Documentation
 
-See detailed documentation at https://cellrefiner.readthedocs.io/en/latest/
+See detailed documentation at https://cellrefiner.readthedocs.io/en/latest/.
