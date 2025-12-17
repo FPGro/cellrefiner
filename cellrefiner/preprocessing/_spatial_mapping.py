@@ -34,8 +34,8 @@ def spatial_mapping(
         n_cell: int = 5,
         device: str = 'cuda:0',
         enable_cupy: bool = True,
+        enable_lr_force = False,
         return_mapping = False,
-        zero_H = True,
         seed: int = 0
     ) -> AnnData:
     """
@@ -106,7 +106,7 @@ def spatial_mapping(
         ad_sc = ad_sc[:, ad_sc.var_names.isin(markers)].copy()
     
     x_coord = ad_st.obsm[spatial_key]
-    M = map_fgw(ad_st, ad_sc, x_coord, seed, device)
+    M, log = map_fgw(ad_st, ad_sc, x_coord, seed, device)
 
     W = gen_w(ad_sc, db)
     x_range = np.abs(np.max(x_coord[:, 0]) - np.min(x_coord[:, 0]))
@@ -156,20 +156,21 @@ def spatial_mapping(
     L = degree - W1
 
     # Fix determinant computation warning
-    try:
-        det_L = np.linalg.det(L)
-        print('det_L:',det_L)
-        # Check for valid determinant (not NaN or inf)
-        if np.isfinite(det_L) and det_L > 1e-10:
-            q = pre_cal1(W1)
-            H = sparsify(W1, q)
-        else:
-            # print("Warning: Laplacian matrix is singular or ill-conditioned, using zero matrix")
-            H = np.zeros(np.shape(W1)) if zero_H else W1
-    except np.linalg.LinAlgError:
-        print("Warning: Determinant computation failed, using zero matrix")
+    if enable_lr_force:
+        try:
+            det_L = np.linalg.det(L)
+            # Check for valid determinant (not NaN or inf)
+            if np.isfinite(det_L) and det_L > 1e-10:
+                q = pre_cal1(W1)
+                H = sparsify(W1, q)
+            else:
+                print("Warning: Laplacian matrix is singular or ill-conditioned, using zero matrix")
+                H = np.zeros(np.shape(W1)) 
+        except np.linalg.LinAlgError:
+            print("Warning: Determinant computation failed, using zero matrix")
+            H = np.zeros(np.shape(W1))
+    else:
         H = np.zeros(np.shape(W1))
-    print('H==0',np.all(H==0))
     adata_cr = ad_sc0[cell5m, :].copy()
 
     if pca_key not in adata_cr.obsm:
@@ -198,6 +199,7 @@ def spatial_mapping(
         adata_cr.obsm['spatial'] = final_positions * x_range / 5000
 
     adata_cr.uns['spatial_mapping'] = dict(scale=scale,n_cell=n_cell,n_rank_gene=n_rank_gene)
+    adata_cr.uns['OT_log'] = log
     if return_mapping:
         return adata_cr, cell5, M
     else:
@@ -451,8 +453,8 @@ def map_fgw(ad_st: AnnData, ad_sc: AnnData, st_location, seed:int, device: str):
     A1d = cosine_similarity(embedding)
     A = np.multiply(A1d, distance_matrix(st_location, st_location))
     A /= A.max()
-    M = mapper(sc_expr, st_expr, A)  # run mapping
-    return M  # numpy matrix output (cell by spot)
+    M, log = mapper(sc_expr, st_expr, A)  # run mapping
+    return M, log # numpy matrix output (cell by spot)
 
 
 def graph_alpha(spatial_locs, n_neighbors=10):
@@ -587,5 +589,7 @@ def mapper(sc_expr, st_expr, A):
         log=True,
         max_iter=1000000
     )
-
-    return T
+    log['M_info'] = {'shape':M.shape,'max':M.max(),'min':M.min()}
+    log['C1_info'] = {'shape':C1.shape,'max':C1.max(),'min':C1.min()}
+    log['C2_info2'] = {'shape':C2.shape,'max':C2.max(),'min':C2.min()}
+    return T, log
