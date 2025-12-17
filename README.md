@@ -7,7 +7,7 @@ CellRefiner requires Python >= 3.9 and NVIDIA GPU with CUDA support.
 
 **Step 1: Create and activate a virtual environment**
 
-We recommend using conda or mamba for environment management. To install Mamba, see https://github.com/conda-forge/miniforge.
+We recommend using Conda or Mamba for environment management. To install Mamba, see https://github.com/conda-forge/miniforge.
 ```bash
 mamba create -n cellrefiner_env python=3.9
 mamba activate cellrefiner_env
@@ -42,7 +42,7 @@ import squidpy as sq
 import cellrefiner as cr
 ```
 
-Load spatial transcriptomics and scRNA-seq datasets 
+Load spatial transcriptomics and scRNA-seq datasets (available via the squidpy package).
 
 ```python
 adata_st = sq.datasets.visium_fluo_adata_crop()
