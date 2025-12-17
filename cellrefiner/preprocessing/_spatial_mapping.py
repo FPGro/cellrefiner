@@ -73,6 +73,8 @@ def spatial_mapping(
         Number of cells to map to each spatial location.
     device : str, default 'cuda:0'
         Device used by pytorch.
+    enable_lr_force : bool, default False
+        Whether to enable ligand-receptor force.
     enable_cupy : bool, default True
         Whether to enable CuPy. If CuPy is not available, will automatically fall back to CPU.
     seed : int, default 0
