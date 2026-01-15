@@ -18,7 +18,7 @@ from .._utils import H_matrix_vectorized_cpu, H_matrix_vectorized_gpu
 from .._utils import F_spot_optimized_cpu, F_spot_optimized_gpu
 from .._utils import V_xy_vectorized_gpu, V_xy_vectorized_cpu
 from .._utils import F_gc_vectorized_gpu, F_gc_vectorized_cpu
-from typing import Optional, Union, List, Iterable
+from typing import Optional, Union, List, Iterable, Tuple
 import warnings
 
 def spatial_mapping(
@@ -106,10 +106,10 @@ def spatial_mapping(
         markers_df = markers_df.iloc[:n_rank_gene, :]
         markers = list(np.unique(markers_df.melt().value.values))
         ad_sc = ad_sc[:, ad_sc.var_names.isin(markers)].copy()
-    
+    # mapping
     x_coord = ad_st.obsm[spatial_key]
     M, log = map_fgw(ad_st, ad_sc, x_coord, seed, device)
-
+    # refine
     W = gen_w(ad_sc, db)
     x_range = np.abs(np.max(x_coord[:, 0]) - np.min(x_coord[:, 0]))
     # parameters
