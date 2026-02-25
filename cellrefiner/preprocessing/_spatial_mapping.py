@@ -452,7 +452,7 @@ def map_fgw(ad_st: AnnData, ad_sc: AnnData, st_location, seed:int, device: str):
     embedding = z.cpu().detach().numpy()
 
     # spatial cost matrix using spaceflow embedding
-    A1d = cosine_similarity(embedding)
+    A1d = 1-cosine_similarity(embedding)
     A = np.multiply(A1d, distance_matrix(st_location, st_location))
     A /= A.max()
     M, log = mapper(sc_expr, st_expr, A)  # run mapping
