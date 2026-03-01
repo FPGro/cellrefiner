@@ -79,3 +79,11 @@ cr.tl.contact_communication(db_lr, adata = adata_cr)
 # Documentation
 
 See detailed documentation at https://cellrefiner.readthedocs.io/en/latest/.
+
+# Citation
+
+This repository accompanies the publication:
+
+    Bourgain-Chang, E., Kuang, X., Cang, Z. et al. Reconstructing single-cell resolution from spatial transcriptomics with CellRefiner. Nat Commun (2026). https://doi.org/10.1038/s41467-026-70090-2
+
+Codes used in the paper are archived under release `v1.0.0`.
