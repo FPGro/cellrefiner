@@ -271,7 +271,8 @@ def spatial_refine_cpu(xs, xc, X_sc2m2, x_id1, H, z_cutoff, x_r, V0, U0, xi1, xi
         pos_cpu_temp = current_positions.copy()
         z2 = np.zeros(pos_cpu_temp.shape[0])
         for j in range(pos_cpu_temp.shape[0]):
-            z2[j] = glvs(pos_cpu_temp[j:j+1, :], pos_cpu[0, j, :], Sigma)
+            # fix: z2[j] = glvs(pos_cpu_temp[j:j+1, :], pos_cpu[0, j, :], Sigma) returned a 1 element array instead of a scalar
+            z2[j] = glvs(pos_cpu_temp[j, :], pos_cpu[0, j, :], Sigma) 
 
         z_ind = z2 < z_val
         if np.any(z_ind):
@@ -279,7 +280,7 @@ def spatial_refine_cpu(xs, xc, X_sc2m2, x_id1, H, z_cutoff, x_r, V0, U0, xi1, xi
             current_positions = pos_cpu_temp
         
         pos_cpu[i + 1, :, :] = current_positions
-        return pos_cpu[-1, :, :]
+    return pos_cpu[-1, :, :] # fix, wrong indentation
 
 def spatial_refine_gpu(xs, xc, X_sc2m2, x_id1, H, z_cutoff, x_r, V0, U0, xi1, xi2, dt, iterations):
 
@@ -355,7 +356,9 @@ def spatial_refine_gpu(xs, xc, X_sc2m2, x_id1, H, z_cutoff, x_r, V0, U0, xi1, xi
         pos_cpu_temp = cp.asnumpy(current_positions)
         z2 = np.zeros(pos_cpu_temp.shape[0])
         for j in range(pos_cpu_temp.shape[0]):
-            z2[j] = glvs(pos_cpu_temp[j:j+1, :], pos_cpu[0, j, :], Sigma)
+            # fix: z2[j] = glvs(pos_cpu_temp[j:j+1, :], pos_cpu[0, j, :], Sigma) returned a 1 element array instead of a scalar
+            z2[j] = glvs(pos_cpu_temp[j, :], pos_cpu[0, j, :], Sigma) 
+
 
         z_ind = z2 < z_val
         if np.any(z_ind):
