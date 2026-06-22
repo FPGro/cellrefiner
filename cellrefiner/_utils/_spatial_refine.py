@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.sparse import issparse, lil_matrix
-from scipy.spatial import Delaunay, distance
+from scipy.spatial import Delaunay, distance, cKDTree
 
 try:
     import cupy as cp
@@ -178,50 +178,54 @@ def H_matrix_vectorized_cpu(positions_i, positions_j, h_weights, mask):
     return forces
 
 def F_spot_optimized_gpu(cell_positions, spot_positions, rS):
-    """Optimized spot force computation"""
+    """Spot force using CPU KD-tree for nearest-neighbor (fast for 2D)"""
+    
+    # Transfer to CPU (~336 KB for 42k × 2 float32, negligible)
+    cell_cpu = cp.asnumpy(cell_positions)
+    spot_cpu = cp.asnumpy(spot_positions)
+
+    # KD-tree query: O(N log N) for 42k 2D points, takes ~1-5ms
+    tree = cKDTree(spot_cpu)
+    closest_distances, closest_indices = tree.query(cell_cpu, k=1)
+
+    # Compute forces on GPU
     n_cells = cell_positions.shape[0]
-    # Vectorized distance computation
-    cell_expanded = cell_positions[:, cp.newaxis, :]
-    spot_expanded = spot_positions[cp.newaxis, :, :]
-    diff = spot_expanded - cell_expanded
-    distances = cp.linalg.norm(diff, axis=2)
-    
-    # Find closest spot for each cell
-    closest_indices = cp.argmin(distances, axis=1)
-    closest_distances = distances[cp.arange(n_cells), closest_indices]
-    
-    # Compute forces
-    forces = cp.zeros((n_cells, 2))
+    forces = cp.zeros((n_cells, 2), dtype=cp.float32)
+
     valid_mask = closest_distances >= rS
-    
-    if cp.any(valid_mask):
-        valid_cells = cp.where(valid_mask)[0]
-        closest_spots = closest_indices[valid_cells]
-        
-        force_diff = (spot_positions[closest_spots] - 
-                        cell_positions[valid_cells])
-        force_distances = closest_distances[valid_cells]
-        
-        force_magnitudes = cp.minimum((force_distances - rS)**2, 30)
-        forces[valid_cells] = (force_magnitudes[:, cp.newaxis] * force_diff / force_distances[:, cp.newaxis])
-    
+    if np.any(valid_mask):
+        valid_cells = np.where(valid_mask)[0]
+        valid_cells_gpu = cp.asarray(valid_cells)
+        closest_spots_gpu = cp.asarray(closest_indices[valid_cells])
+        force_distances_gpu = cp.asarray(closest_distances[valid_cells], dtype=cp.float32)
+
+        force_diff = spot_positions[closest_spots_gpu] - cell_positions[valid_cells_gpu]
+        force_magnitudes = cp.minimum((force_distances_gpu - rS) ** 2, 30)
+        forces[valid_cells_gpu] = (force_magnitudes[:, cp.newaxis] *
+                                   force_diff / force_distances_gpu[:, cp.newaxis])
+
     return forces
 
 def F_spot_optimized_cpu(cell_positions, spot_positions, rS):
-    """Optimized spot force computation"""
+    """Optimized spot force computation using KD-tree"""
+    
     n_cells = cell_positions.shape[0]
-
     forces = np.zeros((n_cells, 2))
-    for i in range(n_cells):
-        diff = spot_positions - cell_positions[i:i+1, :]
-        distances = np.linalg.norm(diff, axis=1)
-        closest_idx = np.argmin(distances)
-        closest_dist = distances[closest_idx]
-        
-        if closest_dist >= rS:
-            force_magnitude = min((closest_dist - rS)**2, 30)
-            force_direction = diff[closest_idx] / closest_dist
-            forces[i] = force_magnitude * force_direction
+
+    tree = cKDTree(spot_positions)
+    closest_distances, closest_indices = tree.query(cell_positions, k=1)
+
+    valid_mask = closest_distances >= rS
+    if np.any(valid_mask):
+        valid_cells = np.where(valid_mask)[0]
+        closest_spots = closest_indices[valid_cells]
+
+        force_diff = spot_positions[closest_spots] - cell_positions[valid_cells]
+        force_distances = closest_distances[valid_cells]
+
+        force_magnitudes = np.minimum((force_distances - rS) ** 2, 30)
+        forces[valid_cells] = (force_magnitudes[:, np.newaxis] *
+                               force_diff / force_distances[:, np.newaxis])
 
     return forces
 
