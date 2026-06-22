@@ -1,5 +1,7 @@
 # Reconstruct single-cell resolution from spatial transcriptomics with CellRefiner
 
+This is a fork for fixing bugs and implementing optimizations, which were mostly implemented by Claude Opus 4.6.
+
  CellRefiner is a physical model-based method that integrates a scRNA-seq dataset with a paired spatial transcriptomics (ST) dataset to generate single-cell resolution in the imputed ST data. CellRefiner models cells as particles connected by forces, and then optimizes cell locations with spatial proximity constraints, gene expression similarity, and ligand-receptor interactions between cells.
 
 # Installation
